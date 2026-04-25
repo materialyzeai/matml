@@ -4,7 +4,7 @@ This repository provides tools for managing the MatML ecosystem, including build
 
 # Available Docker Images
 
-All docker images are at the [Materials Virtual Lab Docker Repository].
+All docker images are at the [Materialyze Docker Repository].
 
 # Running code
 
@@ -73,4 +73,4 @@ IMAGE=/tscc/nfs/home/shyuep/test_singularity/matml_latest.sif
 singularity exec $IMAGE python script.py
 ```
 
-[Materials Virtual Lab Docker Repository]: https://hub.docker.com/orgs/materialyzeai/repositories
+[Materialyze Docker Repository]: https://hub.docker.com/orgs/materialyzeai/repositories

@@ -1,9 +1,9 @@
 [project]
 name = "matml"
 version = "0.1.0"
-description = "Add your description here"
+description = "Dockerfiles for MatML ecosystem."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = []
 
 [dependency-groups]
