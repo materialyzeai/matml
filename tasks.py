@@ -48,8 +48,8 @@ def publish(ctx: Context, fname) -> None:
     if len(toks) == 3:
         tag = f"latest-{toks[2]}"
 
-    ctx.run(f"docker build -t materialsvirtuallab/{name}:{tag} -f {fname} .")
-    ctx.run(f"docker push materialsvirtuallab/{name}:{tag}")
+    ctx.run(f"docker build -t materialyzeai/{name}:{tag} -f {fname} .")
+    ctx.run(f"docker push materialyzeai/{name}:{tag}")
 
 
 @task
