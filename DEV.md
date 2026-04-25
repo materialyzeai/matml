@@ -3,13 +3,13 @@
 To build an image,
 
 ```docker
-docker build -t materialsvirtuallab/matml -f docker/Dockerfile .
+docker build -t materialyzeai/matml -f docker/Dockerfile .
 ```
 
 Pushing the image to the repository.
 
 ```docker
-docker push materialsvirtuallab/matml
+docker push materialyzeai/matml
 ```
 
 The `build_all.sh` script will build and push all images in the docker folder.

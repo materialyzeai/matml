@@ -1,5 +1,5 @@
 # We start from a uv image to make life easier.
-FROM materialsvirtuallab/lammps_gnnp:latest
+FROM materialyzeai/lammps_gnnp:latest
 
 ENV DGLBACKEND=pytorch
 

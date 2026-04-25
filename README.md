@@ -11,7 +11,7 @@ All docker images are at the [Materials Virtual Lab Docker Repository].
 Assuming you have your script `script.py` in the current directory, you can run it using:
 
 ```docker
-docker run --name test -v .:/work -t materialsvirtuallab/matml python /work/script.py
+docker run --name test -v .:/work -t materialyzeai/matml python /work/script.py
 ```
 
 If you need to get a file out of your docker container, use:
@@ -42,7 +42,7 @@ Next pull the docker container.
 
 ```shell
 module load singularitypro
-singularity pull --disable-cache docker://materialsvirtuallab/matml
+singularity pull --disable-cache docker://materialyzeai/matml
 ```
 
 You should see a `matml_latest.sif` file in your directory. Exit the interactive shell.
@@ -73,4 +73,4 @@ IMAGE=/tscc/nfs/home/shyuep/test_singularity/matml_latest.sif
 singularity exec $IMAGE python script.py
 ```
 
-[Materials Virtual Lab Docker Repository]: https://hub.docker.com/orgs/materialsvirtuallab/repositories
+[Materials Virtual Lab Docker Repository]: https://hub.docker.com/orgs/materialyzeai/repositories
