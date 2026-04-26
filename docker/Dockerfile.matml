@@ -1,7 +1,4 @@
 # We start from a uv image to make life easier.
 FROM materialyzeai/lammps_gnnp:latest
 
-ENV DGLBACKEND=pytorch
-
-RUN uv pip install --system matgl==1.2.6 matcalc==0.3.3 matpes
-RUN uv pip install --system dgl==2.1.0 torch==2.2.0 torchdata==0.7.1
+RUN uv pip install --system matgl matcalc matpes

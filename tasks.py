@@ -30,17 +30,6 @@ def generate_workflows(ctx: Context) -> None:
 
 
 @task
-def publish_all(ctx: Context) -> None:
-    """
-    Publish all.
-
-    Args:
-        ctx (Context): The context.
-    """
-
-
-
-@task
 def publish(ctx: Context, fname) -> None:
     toks = Path(fname).name.split(".")
     name = toks[1]
