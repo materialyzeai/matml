@@ -34,6 +34,6 @@ jobs:
           context: .
           file: docker/Dockerfile.matml
           push: true
-          tags: materialsvirtuallab/matml:latest
+          tags: materialyzeai/matml:latest
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
