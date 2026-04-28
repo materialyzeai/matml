@@ -1,4 +1,4 @@
-name: Docker - matgl - latest
+name: Docker - matgl - latest - DGL
 
 on:
   push:
