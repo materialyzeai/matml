@@ -1,10 +1,10 @@
-name: Docker - matgl - latest
+name: Docker - matml - latest
 
 on:
   push:
     branches: [ main ]
     paths:
-      - docker/Dockerfile.matgl
+      - docker/Dockerfile.matml.dgl
   workflow_dispatch:
     inputs:
       task:
@@ -32,8 +32,8 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
           context: .
-          file: docker/Dockerfile.matgl
+          file: docker/Dockerfile.matml.dgl
           push: true
-          tags: materialyzeai/matgl:latest
+          tags: materialyzeai/matml:latest-dgl
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
