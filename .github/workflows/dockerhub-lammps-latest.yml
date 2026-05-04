@@ -1,0 +1,39 @@
+name: Docker - lammps_gnnp - latest
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - docker/Dockerfile.lammps
+  workflow_dispatch:
+    inputs:
+      task:
+        type: choice
+        options: [build]
+        default: dockerhub
+        description: Run build and push.
+
+jobs:
+  dockerhub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: docker/Dockerfile.lammps
+          push: true
+          tags: materialyzeai/lammps:latest
+      - name: Image digest
+        run: echo ${{ steps.docker_build.outputs.digest }}
