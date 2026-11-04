@@ -1,4 +1,4 @@
 # We start from a uv image to make life easier.
 FROM materialyzeai/lammps_gnnp:latest
 
-RUN uv pip install --system matgl matcalc matpes
+RUN uv pip install --system "matgl>=4.1.4" matcalc matpes

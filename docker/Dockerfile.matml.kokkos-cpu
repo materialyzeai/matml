@@ -1,0 +1,6 @@
+# MatML stack (matgl, matcalc, matpes) on top of LAMMPS with KOKKOS (OpenMP) and
+# the native `pair_style matgl` / `matgl/kk`. CPU only, linux/amd64 only.
+FROM materialyzeai/matgl:latest-kokkos-cpu
+
+# CPU-only torch wheel, matching the base image.
+RUN UV_TORCH_BACKEND=cpu uv pip install --system --no-cache "matgl>=4.1.4" matcalc matpes
