@@ -17,7 +17,8 @@
 #   lmp -in in.lammps                                                    # plain pair_style matgl
 #   python -c "from lammps import lammps; lammps(cmdargs=['-k', 'on', 't', '8', '-sf', 'kk'])"
 #
-# Derived images must keep torch at the version LAMMPS was built against, e.g.
+# Derived images must keep torch at the version LAMMPS was built against (see
+# Dockerfile.matml.kokkos-cpu), e.g.
 #   uv pip install --system -c /opt/lammps/torch-constraint.txt <packages>
 
 ########################################################################
