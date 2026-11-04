@@ -2,7 +2,11 @@
 # the native `pair_style matgl` / `matgl/kk` from matgl/lammps. CPU only.
 # For the CUDA build, see Dockerfile.matgl.kokkos.
 #
-# linux/amd64 only (no prebuilt CPU libtorch zip for arm64).
+# LAMMPS is a shared library (liblammps.so) with the `lammps` Python module
+# installed, so it can be driven in-process from Python (e.g. matcalc's
+# MATCALC_BACKEND=LAMMPS) as well as through `lmp`. It links the libtorch of
+# the pip torch wheel: Python and LAMMPS then share one libtorch in the same
+# process, and `lmp` loads TorchScript models exported by the same torch.
 #
 # Build:
 #   docker build -f docker/Dockerfile.matgl.kokkos-cpu -t materialyzeai/matgl:latest-kokkos-cpu .
@@ -11,45 +15,44 @@
 #   mgl create-lammps-model -m materialyze/TensorNet-MatPES-r2SCAN -o model.pt --dtype float32
 #   lmp -k on t 8 -sf kk -pk kokkos newton on neigh half -in in.lammps   # Kokkos/OpenMP
 #   lmp -in in.lammps                                                    # plain pair_style matgl
+#   python -c "from lammps import lammps; lammps(cmdargs=['-k', 'on', 't', '8', '-sf', 'kk'])"
+#
+# Derived images must keep torch at the version LAMMPS was built against, e.g.
+#   uv pip install --system -c /opt/lammps/torch-constraint.txt <packages>
 
 ########################################################################
 # Builder
 ########################################################################
-FROM debian:bookworm AS builder
+# Same Python and site-packages layout as the runtime image, plus compilers.
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm AS builder
 
 # matgl tag that provides lammps/ sources (pair_matgl, pair_matgl_kokkos).
 ARG MATGL_VERSION=4.1.4
 # LAMMPS release verified by matgl upstream.
 ARG LAMMPS_VERSION=stable_22Jul2025_update5
-# CPU libtorch, CXX11 ABI; matches matgl's own host-Kokkos CI job.
-ARG LIBTORCH_VERSION=2.5.1
 ARG CMAKE_VERSION=3.31.6
 ARG BUILD_JOBS=4
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
-        build-essential \
-        ca-certificates \
-        curl \
-        git \
         libfftw3-dev \
         libjpeg-dev \
         libpng-dev \
         ninja-build \
         pkg-config \
-        python3 \
-        unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # LAMMPS requires a newer CMake than Debian ships.
-RUN curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" \
+RUN curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz" \
         | tar -xz -C /usr/local --strip-components=1
 
-RUN curl -fsSL -o /tmp/libtorch.zip \
-        "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-${LIBTORCH_VERSION}%2Bcpu.zip" \
-    && unzip -q /tmp/libtorch.zip -d /opt \
-    && rm /tmp/libtorch.zip
+# The torch wheel provides the libtorch that LAMMPS builds against. Its exact
+# version is recorded so that the runtime image installs the same one.
+RUN mkdir -p /opt/lammps \
+    && UV_TORCH_BACKEND=cpu uv pip install --system --no-cache "matgl>=${MATGL_VERSION}" \
+    && uv pip freeze --system | grep -iE '^torch==' > /opt/lammps/torch-constraint.txt \
+    && cat /opt/lammps/torch-constraint.txt
 
 RUN git clone --depth 1 --branch "v${MATGL_VERSION}" https://github.com/materialyzeai/matgl.git /opt/matgl \
     && git clone --depth 1 --branch "${LAMMPS_VERSION}" https://github.com/lammps/lammps.git /opt/lammps-src
@@ -57,24 +60,28 @@ RUN git clone --depth 1 --branch "v${MATGL_VERSION}" https://github.com/material
 # Register ML-MATGL (+ Kokkos variant) before GenerateStyleHeaders().
 RUN python3 /opt/matgl/lammps/src/ML-MATGL/patch_lammps.py /opt/lammps-src /opt/matgl
 
-# lmp finds libtorch via RPATH rather than LD_LIBRARY_PATH, so the Python torch
-# wheel in the runtime image never picks up these (different-version) libs.
+# CMAKE_CXX_STANDARD=20: recent libtorch headers require C++20.
 # MKL_INCLUDE_DIR: works around libtorch's Caffe2 config leaking MKL_INCLUDE_DIR-NOTFOUND.
-RUN cmake -B /opt/lammps-build -S /opt/lammps-src/cmake -G Ninja \
+# RPATH: lmp and liblammps.so find each other and the wheel's libtorch without LD_LIBRARY_PATH.
+RUN TORCH_PREFIX="$(python3 -c 'import torch; print(torch.utils.cmake_prefix_path)')" \
+    && TORCH_LIB="$(python3 -c 'import os, torch; print(os.path.join(os.path.dirname(torch.__file__), "lib"))')" \
+    && cmake -B /opt/lammps-build -S /opt/lammps-src/cmake -G Ninja \
         -D CMAKE_BUILD_TYPE=Release \
         -D CMAKE_INSTALL_PREFIX=/opt/lammps \
-        -D CMAKE_CXX_STANDARD=17 \
-        -D CMAKE_PREFIX_PATH=/opt/libtorch \
-        -D CMAKE_INSTALL_RPATH=/opt/libtorch/lib \
+        -D CMAKE_INSTALL_LIBDIR=lib \
+        -D CMAKE_CXX_STANDARD=20 \
+        -D CMAKE_PREFIX_PATH="${TORCH_PREFIX}" \
+        -D CMAKE_INSTALL_RPATH="/opt/lammps/lib;${TORCH_LIB}" \
         -D MKL_INCLUDE_DIR=/usr/include \
         -D BUILD_MPI=OFF \
         -D BUILD_OMP=ON \
-        -D BUILD_SHARED_LIBS=OFF \
+        -D BUILD_SHARED_LIBS=ON \
         -D PKG_KOKKOS=ON \
         -D Kokkos_ENABLE_SERIAL=ON \
         -D Kokkos_ENABLE_OPENMP=ON \
         -D PKG_ML-MATGL=ON \
         -D MATGL_PYTHON_EXECUTABLE=/usr/local/bin/python3 \
+        -D PKG_ML-SNAP=ON \
         -D PKG_MANYBODY=ON \
         -D PKG_MOLECULE=ON \
         -D PKG_EXTRA-COMPUTE=ON \
@@ -99,14 +106,16 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
         libpng16-16 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /opt/libtorch/lib /opt/libtorch/lib
 COPY --from=builder /opt/lammps /opt/lammps
 # pair_matgl shells out to export_matgl_checkpoint.py (path baked in at build time)
 # when pair_coeff is given a raw matgl checkpoint directory.
 COPY --from=builder /opt/matgl/lammps /opt/matgl/lammps
+COPY --from=builder /opt/lammps-src/python/lammps /usr/local/lib/python3.12/site-packages/lammps
 
-# CPU-only torch wheel keeps the image small.
-RUN UV_TORCH_BACKEND=cpu uv pip install --system --no-cache "matgl>=${MATGL_VERSION}"
+# CPU-only torch wheel keeps the image small; pinned to the torch LAMMPS was built against.
+RUN UV_TORCH_BACKEND=cpu uv pip install --system --no-cache -c /opt/lammps/torch-constraint.txt "matgl>=${MATGL_VERSION}" \
+    && echo /opt/lammps/lib > /etc/ld.so.conf.d/lammps.conf \
+    && ldconfig
 
 ENV PATH="/opt/lammps/bin:${PATH}" \
     MATGL_PYTHON=/usr/local/bin/python3 \

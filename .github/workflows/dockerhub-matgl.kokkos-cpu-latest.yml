@@ -44,6 +44,15 @@ jobs:
             grep -qw "matgl/kk" /tmp/lmp_help.txt
             grep -q  "KOKKOS"   /tmp/lmp_help.txt
             python -c "import matgl, torch; print(\"matgl\", matgl.__version__, \"torch\", torch.__version__)"
+            # In-process LAMMPS sharing the Python libtorch.
+            python -c "
+          import matgl
+          from lammps import lammps
+          lmp = lammps(cmdargs=[\"-log\", \"none\", \"-screen\", \"none\", \"-k\", \"on\", \"t\", \"1\", \"-sf\", \"kk\"])
+          for style in (\"matgl\", \"matgl/kk\", \"snap\"):
+              assert lmp.has_style(\"pair\", style), style
+          print(lmp.version(), lmp.installed_packages)
+          "
             mgl create-lammps-model --help > /dev/null
           '
       - name: Login to DockerHub
