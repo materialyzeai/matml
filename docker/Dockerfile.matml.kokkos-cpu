@@ -2,5 +2,7 @@
 # the native `pair_style matgl` / `matgl/kk`. CPU only, linux/amd64 only.
 FROM materialyzeai/matgl:latest-kokkos-cpu
 
-# CPU-only torch wheel, matching the base image.
-RUN UV_TORCH_BACKEND=cpu uv pip install --system --no-cache "matgl>=4.1.4" matcalc matpes
+# CPU-only torch wheel, pinned to the torch of the base image, which LAMMPS is built against.
+RUN uv pip freeze --system | grep -iE '^torch==' > /tmp/torch-constraint.txt \
+    && UV_TORCH_BACKEND=cpu uv pip install --system --no-cache -c /tmp/torch-constraint.txt "matgl>=4.1.4" matcalc matpes \
+    && rm /tmp/torch-constraint.txt
