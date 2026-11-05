@@ -1,14 +1,15 @@
 # MatGL (>= 4.1.4) + LAMMPS built with KOKKOS (CUDA + OpenMP) and the native
 # `pair_style matgl` / `matgl/kk` from matgl/lammps.
 #
-# linux/amd64 only (CUDA libtorch has no arm64 build).
+# linux/amd64 only (CUDA libtorch has no arm64 build). Not built by CI; build and
+# push it locally.
 #
 # Build:
 #   docker build -f docker/Dockerfile.matgl.kokkos -t materialyzeai/matgl:latest-kokkos .
 #   # H100: --build-arg KOKKOS_ARCH=HOPPER90 (default AMPERE80 also JITs on Hopper via PTX)
 #
 # Run (single GPU only; multi-rank Kokkos + libtorch is unsupported upstream):
-#   mgl create-lammps-model -m materialyze/TensorNet-MatPES-r2SCAN -o model.pt --dtype float32
+#   mgl create-lammps-model -m TensorNet-PES-MatPES-r2SCAN-2025.2 -o model.pt --dtype float32
 #   lmp -k on g 1 -sf kk -pk kokkos newton on neigh half -in in.lammps
 
 ARG CUDA_VERSION=12.4.1
@@ -97,6 +98,10 @@ RUN cmake -B /opt/lammps-build -S /opt/lammps-src/cmake -G Ninja \
 # Runtime
 ########################################################################
 FROM nvidia/cuda:${CUDA_VERSION}-cudnn-runtime-ubuntu${UBUNTU_VERSION}
+
+LABEL org.opencontainers.image.title="matgl-kokkos" \
+      org.opencontainers.image.description="MatGL with LAMMPS (KOKKOS CUDA + OpenMP, pair_style matgl). Single GPU." \
+      org.opencontainers.image.source="https://github.com/materialyzeai/matml"
 
 ARG MATGL_VERSION=4.1.4
 

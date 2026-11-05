@@ -1,6 +1,7 @@
 name: Docker - matml - latest - Kokkos CPU
 
 on:
+  # build-multiarch.yml changes reach main via the base image's workflow_run below.
   push:
     branches: [ main ]
     paths:
@@ -11,6 +12,7 @@ on:
     paths:
       - docker/Dockerfile.matml.kokkos-cpu
       - .github/workflows/dockerhub-matml.kokkos-cpu-latest.yml
+      - .github/workflows/build-multiarch.yml
   # Rebuild whenever the base image is republished.
   workflow_run:
     workflows: [ "Docker - matgl - latest - Kokkos CPU" ]
@@ -18,43 +20,21 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-env:
-  IMAGE: materialyzeai/matml:latest-kokkos-cpu
-
 jobs:
-  dockerhub:
+  docker:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build
-        uses: docker/build-push-action@v6
-        with:
-          platforms: linux/amd64
-          context: .
-          file: docker/Dockerfile.matml.kokkos-cpu
-          pull: true
-          load: true
-          tags: ${{ env.IMAGE }}
-      - name: Smoke test
-        run: |
-          docker run --rm "$IMAGE" bash -c '
-            set -euo pipefail
-            lmp -h | tee /tmp/lmp_help.txt
-            grep -qw "matgl"    /tmp/lmp_help.txt
-            grep -qw "matgl/kk" /tmp/lmp_help.txt
-            grep -q  "KOKKOS"   /tmp/lmp_help.txt
-            python -c "import matgl, matcalc, matpes, torch; print(\"matgl\", matgl.__version__, \"torch\", torch.__version__)"
-          '
-      - name: Login to DockerHub
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-      - name: Push
-        if: github.event_name != 'pull_request'
-        run: docker push "$IMAGE"
+    uses: ./.github/workflows/build-multiarch.yml
+    secrets: inherit
+    with:
+      file: docker/Dockerfile.matml.kokkos-cpu
+      repository: materialyzeai/matml
+      tag: latest-kokkos-cpu
+      timeout-minutes: 60
+      smoke-test: |
+        set -euo pipefail
+        lmp -h | tee /tmp/lmp_help.txt
+        grep -qw "matgl"    /tmp/lmp_help.txt
+        grep -qw "matgl/kk" /tmp/lmp_help.txt
+        grep -q  "KOKKOS"   /tmp/lmp_help.txt
+        python -c "import matgl, matcalc, matpes, torch; print('matgl', matgl.__version__, 'torch', torch.__version__)"
+        python -c "from lammps import lammps; lammps(cmdargs=['-log', 'none', '-screen', 'none'])"

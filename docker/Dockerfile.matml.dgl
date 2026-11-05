@@ -1,5 +1,17 @@
-# We start from a uv image to make life easier.
+# materialyzeai/matml:latest-dgl  (legacy)
+#
+# matml:latest with DGL 2.1.0 and torch 2.2.0. linux/amd64 and linux/arm64.
+#
+# MatGL removed the DGL backend in v4.0.0, so with matgl >= 4.1.4 from the base
+# image, MATGL_BACKEND=DGL has no effect and the DGL models are not available.
+# Replacing torch also breaks the base image's LAMMPS, which links the libtorch
+# of the original torch wheel.
+# Kept for existing users; for DGL models, use an environment with matgl < 4.
 FROM materialyzeai/matml:latest
+
+LABEL org.opencontainers.image.title="matml-dgl" \
+      org.opencontainers.image.description="Legacy: matml:latest with DGL 2.1.0 and torch 2.2.0. MatGL >= 4 has no DGL backend." \
+      org.opencontainers.image.source="https://github.com/materialyzeai/matml"
 
 ENV MATGL_BACKEND=DGL
 

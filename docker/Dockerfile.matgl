@@ -1,3 +1,14 @@
+# materialyzeai/matgl:latest
+#
+# MatGL (>= 4.1.4) on Python 3.12, with the default torch wheel. No LAMMPS.
+# linux/amd64 and linux/arm64.
+#
+# For LAMMPS with native `pair_style matgl`, use Dockerfile.matgl.kokkos-cpu (CPU)
+# or Dockerfile.matgl.kokkos (CUDA). For matcalc and matpes, use Dockerfile.matml.
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm
+
+LABEL org.opencontainers.image.title="matgl" \
+      org.opencontainers.image.description="MatGL (Materials Graph Library) on Python 3.12." \
+      org.opencontainers.image.source="https://github.com/materialyzeai/matml"
 
 RUN uv pip install --system "matgl>=4.1.4"

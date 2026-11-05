@@ -1,4 +1,23 @@
-# We start from a uv image to make life easier.
-FROM materialyzeai/lammps_gnnp:latest
+# materialyzeai/matml:latest
+#
+# MatML stack (matgl >= 4.1.4, matcalc, matpes) on top of matgl:latest-kokkos-cpu:
+# LAMMPS with KOKKOS (OpenMP + Serial), native `pair_style matgl` / `matgl/kk` and
+# ML-SNAP, built as a shared library with the `lammps` Python module. CPU only,
+# linux/amd64 and linux/arm64.
+#
+# Same build as Dockerfile.matml.kokkos-cpu; keep the two in sync.
+#
+# LAMMPS can run in-process from Python, e.g. matcalc with MATCALC_BACKEND=LAMMPS.
+# See Dockerfile.matgl.kokkos-cpu for `lmp` usage.
+#
+# torch is held at the base image's version, which LAMMPS is built against.
+FROM materialyzeai/matgl:latest-kokkos-cpu
 
-RUN uv pip install --system "matgl>=4.1.4" matcalc matpes
+LABEL org.opencontainers.image.title="matml" \
+      org.opencontainers.image.description="MatML stack (matgl, matcalc, matpes) with LAMMPS (KOKKOS OpenMP, pair_style matgl, ML-SNAP) usable from Python. CPU only." \
+      org.opencontainers.image.source="https://github.com/materialyzeai/matml"
+
+# CPU-only torch wheel, pinned to the torch of the base image, which LAMMPS is built against.
+RUN uv pip freeze --system | grep -iE '^torch==' > /tmp/torch-constraint.txt \
+    && UV_TORCH_BACKEND=cpu uv pip install --system --no-cache -c /tmp/torch-constraint.txt "matgl>=4.1.4" matcalc matpes \
+    && rm /tmp/torch-constraint.txt

@@ -1,0 +1,124 @@
+# Reusable workflow: build an image natively on amd64 and arm64 runners (no QEMU),
+# smoke-test each, push each by digest, then merge them into one multi-arch tag.
+# Pull requests only build and smoke-test.
+name: Build multi-arch image
+
+on:
+  workflow_call:
+    inputs:
+      file:
+        description: Dockerfile path.
+        required: true
+        type: string
+      repository:
+        description: Image repository without tag, e.g. materialyzeai/matgl.
+        required: true
+        type: string
+      tag:
+        description: Image tag, e.g. latest-kokkos-cpu.
+        required: true
+        type: string
+      smoke-test:
+        description: Bash script run inside the built image.
+        required: true
+        type: string
+      build-args:
+        required: false
+        type: string
+        default: ""
+      timeout-minutes:
+        required: false
+        type: number
+        default: 120
+
+env:
+  IMAGE: ${{ inputs.repository }}:${{ inputs.tag }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/${{ matrix.arch }}
+          context: .
+          file: ${{ inputs.file }}
+          build-args: ${{ inputs.build-args }}
+          pull: true
+          load: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=${{ inputs.repository }}-${{ inputs.tag }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.repository }}-${{ inputs.tag }}-${{ matrix.arch }}
+      - name: Smoke test
+        env:
+          SMOKE_TEST: ${{ inputs.smoke-test }}
+        run: docker run --rm "$IMAGE" bash -c "$SMOKE_TEST"
+      - name: Login to DockerHub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      # Same inputs as the tested build, so this is served from the builder's cache.
+      - name: Push by digest
+        id: push
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/${{ matrix.arch }}
+          context: .
+          file: ${{ inputs.file }}
+          build-args: ${{ inputs.build-args }}
+          cache-from: type=gha,scope=${{ inputs.repository }}-${{ inputs.tag }}-${{ matrix.arch }}
+          outputs: type=image,name=${{ inputs.repository }},push-by-digest=true,name-canonical=true,push=true
+      - name: Export digest
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p /tmp/digests
+          echo "${{ steps.push.outputs.digest }}" > "/tmp/digests/${{ matrix.arch }}"
+      - name: Upload digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.arch }}
+          path: /tmp/digests/${{ matrix.arch }}
+          retention-days: 1
+
+  merge:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: /tmp/digests
+          merge-multiple: true
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Create multi-arch tag
+        env:
+          REPOSITORY: ${{ inputs.repository }}
+        run: |
+          refs=$(sed "s#^#${REPOSITORY}@#" /tmp/digests/*)
+          docker buildx imagetools create -t "$IMAGE" $refs
+          docker buildx imagetools inspect "$IMAGE"

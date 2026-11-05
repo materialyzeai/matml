@@ -1,5 +1,6 @@
 # MatGL (>= 4.1.4) + LAMMPS built with KOKKOS host backends (OpenMP + Serial) and
-# the native `pair_style matgl` / `matgl/kk` from matgl/lammps. CPU only.
+# the native `pair_style matgl` / `matgl/kk` from matgl/lammps. CPU only;
+# linux/amd64 and linux/arm64 (CI builds each on a native runner).
 # For the CUDA build, see Dockerfile.matgl.kokkos.
 #
 # LAMMPS is a shared library (liblammps.so) with the `lammps` Python module
@@ -12,7 +13,7 @@
 #   docker build -f docker/Dockerfile.matgl.kokkos-cpu -t materialyzeai/matgl:latest-kokkos-cpu .
 #
 # Run (single rank; pair_matgl does not support multi-rank domain decomposition):
-#   mgl create-lammps-model -m materialyze/TensorNet-MatPES-r2SCAN -o model.pt --dtype float32
+#   mgl create-lammps-model -m TensorNet-PES-MatPES-r2SCAN-2025.2 -o model.pt --dtype float32
 #   lmp -k on t 8 -sf kk -pk kokkos newton on neigh half -in in.lammps   # Kokkos/OpenMP
 #   lmp -in in.lammps                                                    # plain pair_style matgl
 #   python -c "from lammps import lammps; lammps(cmdargs=['-k', 'on', 't', '8', '-sf', 'kk'])"
@@ -95,6 +96,10 @@ RUN TORCH_PREFIX="$(python3 -c 'import torch; print(torch.utils.cmake_prefix_pat
 # Runtime
 ########################################################################
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+LABEL org.opencontainers.image.title="matgl-kokkos-cpu" \
+      org.opencontainers.image.description="MatGL with LAMMPS (KOKKOS OpenMP, pair_style matgl, ML-SNAP) usable from Python. CPU only." \
+      org.opencontainers.image.source="https://github.com/materialyzeai/matml"
 
 ARG MATGL_VERSION=4.1.4
 
