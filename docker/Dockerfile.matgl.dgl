@@ -4,7 +4,8 @@
 #
 # MatGL removed the DGL backend in v4.0.0, so with matgl >= 4.1.4 from the base
 # image, MATGL_BACKEND=DGL has no effect and the DGL models are not available.
-# Kept for existing users; for DGL models, use an environment with matgl < 4.
+# No longer built by CI; the last published tag remains on Docker Hub.
+# For DGL models, use an environment with matgl < 4.
 FROM materialyzeai/matgl:latest
 
 LABEL org.opencontainers.image.title="matgl-dgl" \

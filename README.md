@@ -17,7 +17,7 @@ pushed by a GitHub Actions workflow in [`.github/workflows/`](.github/workflows)
 | `materialyzeai/matgl:latest` | `Dockerfile.matgl` | amd64, arm64 | Python 3.12 and `matgl>=4.1.4`. No LAMMPS. |
 | `materialyzeai/matgl:latest-kokkos-cpu` | `Dockerfile.matgl.kokkos-cpu` | amd64, arm64 | `matgl`, CPU-only torch, and LAMMPS (`stable_22Jul2025_update5`) with KOKKOS (OpenMP + Serial), ML-MATGL, ML-SNAP, MANYBODY, MOLECULE, EXTRA-COMPUTE/DUMP/FIX. LAMMPS is a shared library with the `lammps` Python module, linked against the torch wheel's libtorch. |
 | `materialyzeai/matgl:latest-kokkos` | `Dockerfile.matgl.kokkos` | amd64 | CUDA 12.4 build: `matgl` plus LAMMPS with KOKKOS (CUDA + OpenMP) and ML-MATGL, linked against libtorch 2.5.1 (cu124). Default Kokkos arch is `AMPERE80` (A100). Single GPU only. Not built by CI; build it locally (see the header of the Dockerfile). |
-| `materialyzeai/matgl:latest-dgl` | `Dockerfile.matgl.dgl` | amd64, arm64 | Legacy. `matgl:latest` with `dgl==2.1.0` and `torch==2.2.0`. See the note below. |
+| `materialyzeai/matgl:latest-dgl` | `Dockerfile.matgl.dgl` | amd64, arm64 | Legacy, no longer built by CI. `matgl:latest` with `dgl==2.1.0` and `torch==2.2.0`. See the note below. |
 
 ## matml
 
@@ -27,7 +27,7 @@ The full MatML stack: `matgl`, `matcalc` and `matpes`, together with LAMMPS.
 | --- | --- | --- | --- |
 | `materialyzeai/matml:latest` | `Dockerfile.matml` | amd64, arm64 | `matgl>=4.1.4`, `matcalc`, `matpes` on top of `materialyzeai/matgl:latest-kokkos-cpu` (LAMMPS with KOKKOS OpenMP, `pair_style matgl`, ML-SNAP, usable from Python). torch is held at the base image's version so it still matches LAMMPS. Rebuilt automatically whenever the base image is republished. |
 | `materialyzeai/matml:latest-kokkos-cpu` | `Dockerfile.matml.kokkos-cpu` | amd64, arm64 | Same build as `matml:latest`. |
-| `materialyzeai/matml:latest-dgl` | `Dockerfile.matml.dgl` | amd64, arm64 | Legacy. `matml:latest` with `dgl==2.1.0` and `torch==2.2.0`. See the note below. |
+| `materialyzeai/matml:latest-dgl` | `Dockerfile.matml.dgl` | amd64, arm64 | Legacy, no longer built by CI. `matml:latest` with `dgl==2.1.0` and `torch==2.2.0`. See the note below. |
 
 **Choosing an image.** Use `matml:latest` for MD and property calculations with MatGL potentials, since
 `pair_style matgl` runs the model inside LAMMPS. Use `matgl:latest` when you only need MatGL in Python.

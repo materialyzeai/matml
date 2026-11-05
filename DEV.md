@@ -8,7 +8,7 @@ kokkos-cpu-based images (`matgl:latest-kokkos-cpu`, `matml:latest`, `matml:lates
 reusable workflow `build-multiarch.yml`: each architecture is built and smoke-tested on a native amd64 or
 arm64 runner, pushed by digest, and the digests are merged into one multi-arch tag. These workflows also
 build and smoke-test on pull requests, without pushing. The other images are built for both architectures
-under QEMU. `matgl:latest-kokkos` (CUDA) has no workflow and must be built locally.
+under QEMU. `matgl:latest-kokkos` (CUDA) and the legacy `-dgl` images have no workflow; build them locally if needed.
 
 To build an image locally,
 
