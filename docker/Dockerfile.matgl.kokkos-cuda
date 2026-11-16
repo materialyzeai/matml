@@ -1,0 +1,166 @@
+# syntax=docker/dockerfile:1
+#
+# materialyzeai/matgl:latest-kokkos-hopper90, materialyzeai/matgl:latest-kokkos-blackwell120
+#
+# MatGL (>= 4.1.4) + LAMMPS built with KOKKOS (CUDA + OpenMP + Serial) and the native `pair_style matgl` /
+# `matgl/kk` from matgl/lammps. CUDA counterpart of Dockerfile.matgl.kokkos-cpu; linux/amd64 only.
+#
+# LAMMPS is a shared library (liblammps.so) with the `lammps` Python module, linked against the libtorch of the pip
+# torch wheel, so Python and LAMMPS share one libtorch in the same process (e.g. matcalc MATCALC_BACKEND=LAMMPS).
+#
+# Kokkos compiles for one GPU architecture, so there is one image per GPU family:
+#   latest-kokkos-hopper90      KOKKOS_ARCH=HOPPER90       H100, H200 (sm_90)
+#   latest-kokkos-blackwell120  KOKKOS_ARCH=BLACKWELL120   RTX 5080/5090, RTX PRO 6000 Blackwell (sm_120)
+#
+# Build (no GPU needed):
+#   docker build -f docker/Dockerfile.matgl.kokkos-cuda --build-arg KOKKOS_ARCH=HOPPER90 --build-arg BUILD_JOBS=16 \
+#       -t materialyzeai/matgl:latest-kokkos-hopper90 .
+#
+# GPU only: liblammps.so needs the driver's libcuda.so.1, so `import lammps` fails without a GPU. Host driver must
+# support CUDA 13.2 (the torch wheel's runtime).
+#
+# Run (single GPU, single rank; pair_matgl does not support multi-rank domain decomposition):
+#   mgl create-lammps-model -m TensorNet-PES-MatPES-r2SCAN-2025.2 -o model.pt --dtype float32
+#   lmp -k on g 1 -sf kk -pk kokkos newton on neigh half -in in.lammps
+#   python -c "from lammps import lammps; lammps(cmdargs=['-k', 'on', 'g', '1', '-sf', 'kk'])"
+#
+# Derived images (Dockerfile.matml.kokkos-cuda) must keep torch at the version LAMMPS was built against:
+#   uv pip install --python /opt/venv/bin/python -c /opt/lammps/torch-constraint.txt <packages>
+
+ARG CUDA_VERSION=13.0.2
+ARG UBUNTU_VERSION=24.04
+
+########################################################################
+# Builder
+########################################################################
+FROM docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS builder
+
+# matgl tag that provides lammps/ sources (pair_matgl, pair_matgl_kokkos).
+ARG MATGL_VERSION=4.1.4
+# LAMMPS release verified by matgl upstream.
+ARG LAMMPS_VERSION=stable_22Jul2025_update5
+# Same torch as matgl:latest-kokkos-cpu; the PyPI wheel is the CUDA 13.2 build.
+ARG TORCH_VERSION=2.15.0
+ARG CMAKE_VERSION=3.31.6
+ARG KOKKOS_ARCH=AMPERE80
+ARG BUILD_JOBS=8
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1
+
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        libfftw3-dev \
+        libjpeg-dev \
+        libpng-dev \
+        ninja-build \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# LAMMPS requires a newer CMake than Ubuntu ships.
+RUN curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" \
+        | tar -xz -C /usr/local --strip-components=1
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+# The torch wheel provides the libtorch that LAMMPS builds against. Its exact version is recorded so that the
+# runtime image and derived images install the same one.
+RUN uv venv --python 3.12 /opt/venv \
+    && uv pip install --python /opt/venv/bin/python "torch==${TORCH_VERSION}" "matgl>=${MATGL_VERSION}" \
+    && mkdir -p /opt/lammps \
+    && uv pip freeze --python /opt/venv/bin/python | grep -iE '^torch==' > /opt/lammps/torch-constraint.txt \
+    && cat /opt/lammps/torch-constraint.txt
+
+RUN git clone --depth 1 --branch "v${MATGL_VERSION}" https://github.com/materialyzeai/matgl.git /opt/matgl \
+    && git clone --depth 1 --branch "${LAMMPS_VERSION}" https://github.com/lammps/lammps.git /opt/lammps-src
+
+# Register ML-MATGL (+ Kokkos variant) before GenerateStyleHeaders().
+RUN /opt/venv/bin/python /opt/matgl/lammps/src/ML-MATGL/patch_lammps.py /opt/lammps-src /opt/matgl
+
+# CMAKE_CXX_STANDARD=20: recent libtorch headers require C++20.
+# MKL_INCLUDE_DIR: works around libtorch's Caffe2 config leaking MKL_INCLUDE_DIR-NOTFOUND.
+# RPATH: lmp and liblammps.so find each other and the wheel's libtorch without LD_LIBRARY_PATH.
+# CMAKE_EXE_LINKER_FLAGS: lmp links the driver stub (libcuda.so.1 is provided by the host driver at run time).
+RUN TORCH_PREFIX="$(/opt/venv/bin/python -c 'import torch; print(torch.utils.cmake_prefix_path)')" \
+    && TORCH_LIB="$(/opt/venv/bin/python -c 'import os, torch; print(os.path.join(os.path.dirname(torch.__file__), "lib"))')" \
+    && cmake -B /opt/lammps-build -S /opt/lammps-src/cmake -G Ninja \
+        -D CMAKE_BUILD_TYPE=Release \
+        -D CMAKE_INSTALL_PREFIX=/opt/lammps \
+        -D CMAKE_INSTALL_LIBDIR=lib \
+        -D CMAKE_CXX_STANDARD=20 \
+        -D CMAKE_CXX_COMPILER=/opt/lammps-src/lib/kokkos/bin/nvcc_wrapper \
+        -D CUDAToolkit_ROOT=/usr/local/cuda \
+        -D CMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+        -D CMAKE_PREFIX_PATH="${TORCH_PREFIX}" \
+        -D CMAKE_INSTALL_RPATH="/opt/lammps/lib;${TORCH_LIB}" \
+        -D MKL_INCLUDE_DIR=/usr/include \
+        -D Python_EXECUTABLE=/opt/venv/bin/python \
+        -D CMAKE_EXE_LINKER_FLAGS="-L/usr/local/cuda/lib64/stubs -lcuda" \
+        -D BUILD_MPI=OFF \
+        -D BUILD_OMP=ON \
+        -D BUILD_SHARED_LIBS=ON \
+        -D PKG_KOKKOS=ON \
+        -D Kokkos_ENABLE_SERIAL=ON \
+        -D Kokkos_ENABLE_OPENMP=ON \
+        -D Kokkos_ENABLE_CUDA=ON \
+        -D "Kokkos_ARCH_${KOKKOS_ARCH}=ON" \
+        -D PKG_ML-MATGL=ON \
+        -D MATGL_PYTHON_EXECUTABLE=/opt/venv/bin/python \
+        -D PKG_ML-SNAP=ON \
+        -D PKG_MANYBODY=ON \
+        -D PKG_MOLECULE=ON \
+        -D PKG_EXTRA-COMPUTE=ON \
+        -D PKG_EXTRA-DUMP=ON \
+        -D PKG_EXTRA-FIX=ON \
+    && cmake --build /opt/lammps-build -j "${BUILD_JOBS}" \
+    && cmake --install /opt/lammps-build
+
+########################################################################
+# Runtime
+########################################################################
+FROM docker.io/nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION}
+
+ARG MATGL_VERSION=4.1.4
+ARG KOKKOS_ARCH=AMPERE80
+
+LABEL org.opencontainers.image.title="matgl-kokkos" \
+      org.opencontainers.image.description="MatGL with LAMMPS (KOKKOS CUDA ${KOKKOS_ARCH}, pair_style matgl, ML-SNAP) usable from Python." \
+      org.opencontainers.image.source="https://github.com/materialyzeai/matml" \
+      ai.materialyze.kokkos-arch="${KOKKOS_ARCH}"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1
+
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libfftw3-double3 \
+        libgomp1 \
+        libjpeg-turbo8 \
+        libpng16-16t64 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+COPY --from=builder /opt/python /opt/python
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /opt/lammps /opt/lammps
+# pair_matgl shells out to export_matgl_checkpoint.py (path baked in at build time)
+# when pair_coeff is given a raw matgl checkpoint directory.
+COPY --from=builder /opt/matgl/lammps /opt/matgl/lammps
+COPY --from=builder /opt/lammps-src/python/lammps /opt/venv/lib/python3.12/site-packages/lammps
+
+RUN echo /opt/lammps/lib > /etc/ld.so.conf.d/lammps.conf \
+    && ldconfig
+
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:/opt/lammps/bin:${PATH}" \
+    MATGL_PYTHON=/opt/venv/bin/python \
+    OMP_PROC_BIND=spread \
+    OMP_PLACES=threads
+
+WORKDIR /work

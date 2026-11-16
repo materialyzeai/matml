@@ -17,6 +17,8 @@ pushed by a GitHub Actions workflow in [`.github/workflows/`](.github/workflows)
 | `materialyzeai/matgl:latest` | `Dockerfile.matgl` | amd64, arm64 | Python 3.12 and `matgl>=4.1.4`. No LAMMPS. |
 | `materialyzeai/matgl:latest-kokkos-cpu` | `Dockerfile.matgl.kokkos-cpu` | amd64, arm64 | `matgl`, CPU-only torch, and LAMMPS (`stable_22Jul2025_update5`) with KOKKOS (OpenMP + Serial), ML-MATGL, ML-SNAP, MANYBODY, MOLECULE, EXTRA-COMPUTE/DUMP/FIX. LAMMPS is a shared library with the `lammps` Python module, linked against the torch wheel's libtorch. |
 | `materialyzeai/matgl:latest-kokkos` | `Dockerfile.matgl.kokkos` | amd64 | CUDA 12.4 build: `matgl` plus LAMMPS with KOKKOS (CUDA + OpenMP) and ML-MATGL, linked against libtorch 2.5.1 (cu124). Default Kokkos arch is `AMPERE80` (A100). Single GPU only. Not built by CI; build it locally (see the header of the Dockerfile). |
+| `materialyzeai/matgl:latest-kokkos-hopper90` | `Dockerfile.matgl.kokkos-cuda` | amd64 | CUDA build of `matgl:latest-kokkos-cpu`: the same LAMMPS (shared library with the `lammps` Python module, ML-MATGL, ML-SNAP, ...) with KOKKOS (CUDA + OpenMP + Serial), linked against the CUDA torch wheel (torch 2.15.0, CUDA 13.2). Built for `HOPPER90`: H100, H200. Single GPU. |
+| `materialyzeai/matgl:latest-kokkos-blackwell120` | `Dockerfile.matgl.kokkos-cuda` | amd64 | Same, built for `BLACKWELL120`: RTX 5080/5090, RTX PRO 6000 Blackwell (sm_120). |
 | `materialyzeai/matgl:latest-dgl` | `Dockerfile.matgl.dgl` | amd64, arm64 | Legacy, no longer built by CI. `matgl:latest` with `dgl==2.1.0` and `torch==2.2.0`. See the note below. |
 
 ## matml
@@ -27,7 +29,13 @@ The full MatML stack: `matgl`, `matcalc` and `matpes`, together with LAMMPS.
 | --- | --- | --- | --- |
 | `materialyzeai/matml:latest` | `Dockerfile.matml` | amd64, arm64 | `matgl>=4.1.4`, `matcalc`, `matpes` on top of `materialyzeai/matgl:latest-kokkos-cpu` (LAMMPS with KOKKOS OpenMP, `pair_style matgl`, ML-SNAP, usable from Python). torch is held at the base image's version so it still matches LAMMPS. Rebuilt automatically whenever the base image is republished. |
 | `materialyzeai/matml:latest-kokkos-cpu` | `Dockerfile.matml.kokkos-cpu` | amd64, arm64 | Same build as `matml:latest`. |
+| `materialyzeai/matml:latest-kokkos-hopper90` | `Dockerfile.matml.kokkos-cuda` | amd64 | `matgl>=4.1.4`, `matcalc>=0.8.0`, `matpes` on top of `materialyzeai/matgl:latest-kokkos-hopper90` (LAMMPS with KOKKOS CUDA). H100, H200. |
+| `materialyzeai/matml:latest-kokkos-blackwell120` | `Dockerfile.matml.kokkos-cuda` | amd64 | Same, on top of `materialyzeai/matgl:latest-kokkos-blackwell120`. RTX 5080/5090, RTX PRO 6000 Blackwell (sm_120). |
 | `materialyzeai/matml:latest-dgl` | `Dockerfile.matml.dgl` | amd64, arm64 | Legacy, no longer built by CI. `matml:latest` with `dgl==2.1.0` and `torch==2.2.0`. See the note below. |
+
+**CUDA images (`-hopper90`, `-blackwell120`).** Kokkos is compiled for one GPU architecture, so pick the tag
+that matches your GPU. The host needs an NVIDIA driver that supports CUDA 13.2 and the NVIDIA Container Toolkit
+(`docker run --gpus`).
 
 **Choosing an image.** Use `matml:latest` for MD and property calculations with MatGL potentials, since
 `pair_style matgl` runs the model inside LAMMPS. Use `matgl:latest` when you only need MatGL in Python.
@@ -87,6 +95,12 @@ lmp = lammps(cmdargs=["-k", "on", "t", "8", "-sf", "kk"])
 ```
 
 For the CUDA image, replace the Kokkos flags with `-k on g 1 -sf kk -pk kokkos newton on neigh half`.
+For example, with the `-hopper90` and `-blackwell120` images:
+
+```shell
+docker run --rm --gpus all -v .:/work -t materialyzeai/matml:latest-kokkos-hopper90 \
+    lmp -k on g 1 -sf kk -pk kokkos newton on neigh half -in in.lammps
+```
 
 ## Extending the Kokkos images
 
@@ -96,6 +110,13 @@ is built against that torch's libtorch. Install with the bundled constraint file
 ```dockerfile
 FROM materialyzeai/matgl:latest-kokkos-cpu
 RUN UV_TORCH_BACKEND=cpu uv pip install --system -c /opt/lammps/torch-constraint.txt <packages>
+```
+
+The `-hopper90` and `-blackwell120` images keep their packages in a virtual environment at `/opt/venv`:
+
+```dockerfile
+FROM materialyzeai/matgl:latest-kokkos-hopper90
+RUN uv pip install --python /opt/venv/bin/python -c /opt/lammps/torch-constraint.txt <packages>
 ```
 
 # Running on HPC such as Expanse or NERSC
