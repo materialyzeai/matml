@@ -1,0 +1,26 @@
+# materialyzeai/matml:latest-kokkos-hopper90, materialyzeai/matml:latest-kokkos-blackwell120
+#
+# MatML stack (matgl >= 4.1.4, matcalc, matpes) on top of matgl:latest-kokkos-<arch>: LAMMPS with KOKKOS
+# (CUDA + OpenMP + Serial), native `pair_style matgl` / `matgl/kk` and ML-SNAP, built as a shared library with the
+# `lammps` Python module. CUDA counterpart of Dockerfile.matml.kokkos-cpu. linux/amd64 only.
+#
+# Build on top of the matgl image for the same GPU family (see Dockerfile.matgl.kokkos-cuda for the
+# tags), e.g.:
+#   docker build -f docker/Dockerfile.matml.kokkos-cuda \
+#       --build-arg BASE_IMAGE=materialyzeai/matgl:latest-kokkos-hopper90 \
+#       -t materialyzeai/matml:latest-kokkos-hopper90 .
+#
+# Run matcalc on LAMMPS (single GPU):
+#   MATCALC_BACKEND=LAMMPS MATCALC_LAMMPS_ARGS="-k on g 1 -sf kk -pk kokkos newton on neigh half" python ...
+#
+# torch is held at the base image's version, which LAMMPS is built against.
+ARG BASE_IMAGE=materialyzeai/matgl:latest-kokkos-hopper90
+FROM ${BASE_IMAGE}
+
+LABEL org.opencontainers.image.title="matml-kokkos" \
+      org.opencontainers.image.description="MatML stack (matgl, matcalc, matpes) with LAMMPS (KOKKOS CUDA, pair_style matgl, ML-SNAP) usable from Python." \
+      org.opencontainers.image.source="https://github.com/materialyzeai/matml"
+
+# CUDA torch wheel from the base image; the constraint keeps it at the version LAMMPS was built against.
+RUN uv pip install --python /opt/venv/bin/python -c /opt/lammps/torch-constraint.txt \
+        "matgl>=4.1.4" matcalc matpes
