@@ -29,7 +29,7 @@ The full MatML stack: `matgl`, `matcalc` and `matpes`, together with LAMMPS.
 | --- | --- | --- | --- |
 | `materialyzeai/matml:latest` | `Dockerfile.matml` | amd64, arm64 | `matgl>=4.1.4`, `matcalc`, `matpes` on top of `materialyzeai/matgl:latest-kokkos-cpu` (LAMMPS with KOKKOS OpenMP, `pair_style matgl`, ML-SNAP, usable from Python). torch is held at the base image's version so it still matches LAMMPS. Rebuilt automatically whenever the base image is republished. |
 | `materialyzeai/matml:latest-kokkos-cpu` | `Dockerfile.matml.kokkos-cpu` | amd64, arm64 | Same build as `matml:latest`. |
-| `materialyzeai/matml:latest-kokkos-hopper90` | `Dockerfile.matml.kokkos-cuda` | amd64 | `matgl>=4.1.4`, `matcalc`, `matpes` on top of `materialyzeai/matgl:latest-kokkos-hopper90` (LAMMPS with KOKKOS CUDA). H100, H200. |
+| `materialyzeai/matml:latest-kokkos-hopper90` | `Dockerfile.matml.kokkos-cuda` | amd64 | `matgl>=4.1.4`, `matcalc>=0.8.0`, `matpes` on top of `materialyzeai/matgl:latest-kokkos-hopper90` (LAMMPS with KOKKOS CUDA). H100, H200. |
 | `materialyzeai/matml:latest-kokkos-blackwell120` | `Dockerfile.matml.kokkos-cuda` | amd64 | Same, on top of `materialyzeai/matgl:latest-kokkos-blackwell120`. RTX 5080/5090, RTX PRO 6000 Blackwell (sm_120). |
 | `materialyzeai/matml:latest-dgl` | `Dockerfile.matml.dgl` | amd64, arm64 | Legacy, no longer built by CI. `matml:latest` with `dgl==2.1.0` and `torch==2.2.0`. See the note below. |
 
